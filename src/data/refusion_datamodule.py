@@ -7,7 +7,7 @@ from torchvision.datasets import MNIST
 from torchvision.transforms import transforms
 
 
-class MNISTDataModule(LightningDataModule):
+class REFusionDataModule(LightningDataModule):
     """Example of LightningDataModule for MNIST dataset.
 
     A DataModule implements 6 key methods:
@@ -57,17 +57,12 @@ class MNISTDataModule(LightningDataModule):
         self.data_val: Optional[Dataset] = None
         self.data_test: Optional[Dataset] = None
 
-    @property
-    def num_classes(self):
-        return 10
-
     def prepare_data(self):
         """Download data if needed.
 
         Do not use it to assign state (self.x = y).
         """
-        MNIST(self.hparams.data_dir, train=True, download=True)
-        MNIST(self.hparams.data_dir, train=False, download=True)
+        pass
 
     def setup(self, stage: Optional[str] = None):
         """Load data. Set variables: `self.data_train`, `self.data_val`, `self.data_test`.
@@ -94,7 +89,6 @@ class MNISTDataModule(LightningDataModule):
             pin_memory=self.hparams.pin_memory,
             shuffle=True,
         )
-
     def val_dataloader(self):
         return DataLoader(
             dataset=self.data_val,
