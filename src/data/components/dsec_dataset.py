@@ -17,9 +17,12 @@ from src.utils.ACT_utils.ACT_utils import tubelet_in_out_tubes, tubelet_has_gt
 
 class BaseDataset(data.Dataset):
 
-    def __init__(self, opt, mode, ROOT_DATASET_PATH, pkl_filename):
+    def __init__(self, mode, ROOT_DATASET_PATH, resize_height, resize_width, K):
 
         super(BaseDataset, self).__init__()
+        self.ROOT_DATASET_PATH = ROOT_DATASET_PATH
+        # self.ROOT_DATASET_PATH = os.path.join(root_dir, 'data/DSEC')
+        pkl_filename = 'DSEC-GT.pkl'
         pkl_file = os.path.join(ROOT_DATASET_PATH, pkl_filename)
 
         with open(pkl_file, 'rb') as fid:
@@ -27,15 +30,15 @@ class BaseDataset(data.Dataset):
         for k in pkl:
             setattr(self, ('_' if k != 'labels' else '') + k, pkl[k])
 
-        self.split = opt.split
+        self.split = 1 # for DSEC
         self.mode = mode
-        self.K = opt.K
-        self.opt = opt
+        self.K = K
+        self.down_ratio = 4
 
         self._mean_values = [104.0136177, 114.0342201, 119.91659325]
-        self._ninput = opt.ninput
-        self._resize_height = opt.resize_height
-        self._resize_width = opt.resize_width
+        self._ninput = 1 # for DSEC
+        self._resize_height = resize_height
+        self._resize_width = resize_width
 
         assert len(self._train_videos[self.split - 1]) + len(self._test_videos[self.split - 1]) == len(self._nframes)
         self._indices = []
@@ -110,22 +113,29 @@ class BaseDataset(data.Dataset):
     def __len__(self):
         return len(self._indices)
 
-    def imagefile(self, v, i):
-        raise NotImplementedError
-
     def flowfile(self, v, i):
         raise NotImplementedError
-    
 
-class Sampler(data.Dataset):
+    def imagefile(self, v, i):
+        return os.path.join(self.ROOT_DATASET_PATH, 'RGB-images', v, '{:0>6}.png'.format(i))
+
+    def eventfile(self, v, i):
+        return os.path.join(self.ROOT_DATASET_PATH, 'Event-images', v, '{:0>6}.png'.format(i))
+
+    def eventfile_30ms(self, v, i):
+        return os.path.join(self.ROOT_DATASET_PATH, 'Event-images_30ms', v, '{:0>6}.png'.format(i))
+
+    def eventfile_50ms(self, v, i):
+        return os.path.join(self.ROOT_DATASET_PATH, 'Event-images_50ms', v, '{:0>6}.png'.format(i))
+    
     def __getitem__(self, id):
         v, frame = self._indices[id]
         K = self.K
         num_classes = self.num_classes
         input_h = self._resize_height
         input_w = self._resize_width
-        output_h = input_h // self.opt.down_ratio
-        output_w = input_w // self.opt.down_ratio
+        output_h = input_h // self.down_ratio
+        output_w = input_w // self.down_ratio
         # read images
         images_image = [cv2.imread(self.imagefile(v, frame + i)).astype(np.float32) for i in range(K)]
 
@@ -220,8 +230,10 @@ class Sampler(data.Dataset):
         images_event_50ms = [cv2.resize(im, (input_w, input_h), interpolation=cv2.INTER_LINEAR) for im in images_event_50ms]
 
         # transpose image channel and normalize
-        mean = np.tile(np.array(self.opt.mean, dtype=np.float32)[:, None, None], (self._ninput, 1, 1))
-        std = np.tile(np.array(self.opt.std, dtype=np.float32)[:, None, None], (self._ninput, 1, 1))
+        mean = [0.40789654, 0.44719302, 0.47026115]
+        std = [0.28863828, 0.27408164, 0.27809835]
+        mean = np.tile(np.array(mean, dtype=np.float32)[:, None, None], (self._ninput, 1, 1))
+        std = np.tile(np.array(std, dtype=np.float32)[:, None, None], (self._ninput, 1, 1))
         for i in range(K):
             for ii in range(self._ninput):
 
@@ -287,21 +299,3 @@ class Sampler(data.Dataset):
         result = {'input': data, 'hm': hm, 'mov': mov, 'wh': wh, 'mask': mask, 'index': index, 'index_all': index_all}
 
         return result
-
-    num_classes = 1
-
-    def __init__(self, opt, mode):
-        self.ROOT_DATASET_PATH = os.path.join(opt.root_dir, 'data/DSEC')
-        pkl_filename = 'DSEC-GT.pkl'
-        super(DSEC, self).__init__(opt, mode, self.ROOT_DATASET_PATH, pkl_filename)
-
-    def imagefile(self, v, i):
-        return os.path.join(self.ROOT_DATASET_PATH, 'RGB-images', v, '{:0>6}.png'.format(i))
-
-    def eventfile(self, v, i):
-        return os.path.join(self.ROOT_DATASET_PATH, 'Event-images', v, '{:0>6}.png'.format(i))
-
-    def eventfile_30ms(self, v, i):
-        return os.path.join(self.ROOT_DATASET_PATH, 'Event-images_30ms', v, '{:0>6}.png'.format(i))
-    def eventfile_50ms(self, v, i):
-        return os.path.join(self.ROOT_DATASET_PATH, 'Event-images_50ms', v, '{:0>6}.png'.format(i))

@@ -1,10 +1,8 @@
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, Optional
 
-import torch
 from lightning import LightningDataModule
-from torch.utils.data import ConcatDataset, DataLoader, Dataset, random_split
-from torchvision.datasets import MNIST
-from torchvision.transforms import transforms
+from torch.utils.data import DataLoader, Dataset
+from src.data.components.dsec_dataset import BaseDataset
 
 
 class REFusionDataModule(LightningDataModule):
@@ -36,11 +34,13 @@ class REFusionDataModule(LightningDataModule):
 
     def __init__(
         self,
-        data_dir: str = "data/",
-        train_val_test_split: Tuple[int, int, int] = (55_000, 5_000, 10_000),
+        ROOT_DATASET_PATH: str = "data/",
         batch_size: int = 64,
-        num_workers: int = 0,
-        pin_memory: bool = False,
+        num_workers: int = 8,
+        pin_memory: bool = True,
+        resize_height: int = 288,
+        resize_width: int = 288,
+        K: int = 3,
     ):
         super().__init__()
 
@@ -49,9 +49,9 @@ class REFusionDataModule(LightningDataModule):
         self.save_hyperparameters(logger=False)
 
         # data transformations
-        self.transforms = transforms.Compose(
-            [transforms.ToTensor(), transforms.Normalize((0.1307,), (0.3081,))]
-        )
+        # self.transforms = transforms.Compose(
+        #     [transforms.ToTensor(), transforms.Normalize((0.1307,), (0.3081,))]
+        # )
 
         self.data_train: Optional[Dataset] = None
         self.data_val: Optional[Dataset] = None
@@ -72,15 +72,9 @@ class REFusionDataModule(LightningDataModule):
         """
         # load and split datasets only if not loaded already
         if not self.data_train and not self.data_val and not self.data_test:
-            
-            trainset = MNIST(self.hparams.data_dir, train=True, transform=self.transforms)
-            testset = MNIST(self.hparams.data_dir, train=False, transform=self.transforms)
-            dataset = ConcatDataset(datasets=[trainset, testset])
-            self.data_train, self.data_val, self.data_test = random_split(
-                dataset=dataset,
-                lengths=self.hparams.train_val_test_split,
-                generator=torch.Generator().manual_seed(42),
-            )
+            self.data_train = BaseDataset(mode="train",ROOT_DATASET_PATH=self.hparams.ROOT_DATASET_PATH,resize_height=self.hparams.resize_height,resize_width=self.hparams.resize_width,K=self.hparams.K)
+            self.data_val = BaseDataset(mode="test",ROOT_DATASET_PATH=self.hparams.ROOT_DATASET_PATH,resize_height=self.hparams.resize_height,resize_width=self.hparams.resize_width,K=self.hparams.K)
+            self.data_test = BaseDataset(mode="test",ROOT_DATASET_PATH=self.hparams.ROOT_DATASET_PATH,resize_height=self.hparams.resize_height,resize_width=self.hparams.resize_width,K=self.hparams.K)
 
     def train_dataloader(self):
         return DataLoader(
@@ -88,7 +82,9 @@ class REFusionDataModule(LightningDataModule):
             batch_size=self.hparams.batch_size,
             num_workers=self.hparams.num_workers,
             pin_memory=self.hparams.pin_memory,
+            persistent_workers=True,
             shuffle=True,
+            drop_last=True,
         )
     def val_dataloader(self):
         return DataLoader(
@@ -97,6 +93,7 @@ class REFusionDataModule(LightningDataModule):
             num_workers=self.hparams.num_workers,
             pin_memory=self.hparams.pin_memory,
             shuffle=False,
+            drop_last=True,
         )
 
     def test_dataloader(self):
@@ -106,6 +103,7 @@ class REFusionDataModule(LightningDataModule):
             num_workers=self.hparams.num_workers,
             pin_memory=self.hparams.pin_memory,
             shuffle=False,
+            drop_last=True,
         )
 
     def teardown(self, stage: Optional[str] = None):
